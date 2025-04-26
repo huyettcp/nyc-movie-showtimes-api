@@ -1,13 +1,19 @@
+import logging
+from threading import Thread
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
 import json
-from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 
 CACHE_FILE = 'cached_showtimes.json'
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # NYC Movie Theaters with addresses and URLs
 theaters = [
@@ -29,6 +35,8 @@ theaters = [
 ]
 
 def scrape_nyc_movie_showtimes():
+    logger.info("Scheduler started: Scraping movie showtimes...")
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
@@ -90,6 +98,8 @@ def scrape_nyc_movie_showtimes():
     with open(CACHE_FILE, 'w') as f:
         json.dump(output, f)
 
+    logger.info("Scheduler completed: Scraping finished.")
+
     return output
 
 def load_cached_data():
@@ -117,10 +127,17 @@ def manual_refresh():
 def health_check():
     return jsonify({"status": "OK", "message": "NYC Movie Showtimes API is running."})
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(scrape_nyc_movie_showtimes, 'cron', hour=4, minute=0)
-scheduler.start()
+# Start the scheduler at 4:00 AM daily for production (or testing)
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(scrape_nyc_movie_showtimes, 'cron', hour=4, minute=0, misfire_grace_time=60 * 60 * 2)  # 2 hours grace time
+    scheduler.start()
 
+# Start the scheduler in a separate thread
 if __name__ == '__main__':
-    scrape_nyc_movie_showtimes()
+    scheduler_thread = Thread(target=start_scheduler)
+    scheduler_thread.start()
+
+    # Start Flask
+    scrape_nyc_movie_showtimes()  # Initial scrape for testing
     app.run(debug=True)
