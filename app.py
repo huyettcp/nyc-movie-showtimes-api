@@ -2,12 +2,14 @@ import logging
 from threading import Thread
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify
+from flask_cors import CORS
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
 import json
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 CACHE_FILE = 'cached_showtimes.json'
 
@@ -51,10 +53,7 @@ def scrape_nyc_movie_showtimes():
             date_obj = datetime.today() + timedelta(days=i)
             date_str = date_obj.strftime('%Y-%m-%d')
 
-            if i == 0:
-                url = base_url
-            else:
-                url = f"{base_url}?date={date_str}"
+            url = base_url if i == 0 else f"{base_url}?date={date_str}"
 
             response = requests.get(url, headers=headers)
             if response.status_code != 200:
@@ -127,17 +126,14 @@ def manual_refresh():
 def health_check():
     return jsonify({"status": "OK", "message": "NYC Movie Showtimes API is running."})
 
-# Start the scheduler at 4:00 AM daily for production (or testing)
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(scrape_nyc_movie_showtimes, 'cron', hour=4, minute=0, misfire_grace_time=60 * 60 * 2)  # 2 hours grace time
+    scheduler.add_job(scrape_nyc_movie_showtimes, 'cron', hour=4, minute=0, misfire_grace_time=60 * 60 * 2)
     scheduler.start()
 
-# Start the scheduler in a separate thread
 if __name__ == '__main__':
     scheduler_thread = Thread(target=start_scheduler)
     scheduler_thread.start()
 
-    # Start Flask
-    scrape_nyc_movie_showtimes()  # Initial scrape for testing
-    app.run(debug=True)
+    scrape_nyc_movie_showtimes()  # Initial scrape on startup
+    app.run(debug=False, host='0.0.0.0', port=10000)  # Use debug=False for production-like behavior

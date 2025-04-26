@@ -1,7 +1,17 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Virtual environment
+venv/
+
+# Environment variables
 .env
-cached_showtimes.json
+
+# macOS system files
 .DS_Store
+
+# Cache file (local data storage)
+cached_showtimes.json
