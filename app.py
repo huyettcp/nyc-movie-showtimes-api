@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 import json
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  # Enable CORS
 
 CACHE_FILE = 'cached_showtimes.json'
 
@@ -17,7 +17,7 @@ CACHE_FILE = 'cached_showtimes.json'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# NYC Movie Theaters with addresses and URLs
+# --- Full List of Theaters ---
 theaters = [
     {"name": "AMC Empire 25", "address": "234 W 42nd St, New York, NY 10036", "url": "https://feverup.com/movies/en/united-states/movie-theaters/amc-empire-25"},
     {"name": "AMC 84th Street 6", "address": "2310 Broadway, New York, NY 10024", "url": "https://feverup.com/movies/en/united-states/movie-theaters/amc-84th-street-6"},
@@ -36,9 +36,9 @@ theaters = [
     {"name": "Regal UA Kaufman Astoria", "address": "35-30 38th St, Astoria, NY 11101", "url": "https://feverup.com/movies/en/united-states/movie-theaters/regal-ua-kaufman-astoria"}
 ]
 
+# --- Scraper Function ---
 def scrape_nyc_movie_showtimes():
-    logger.info("Scheduler started: Scraping movie showtimes...")
-
+    logger.info("Scraper started...")
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
@@ -97,10 +97,9 @@ def scrape_nyc_movie_showtimes():
     with open(CACHE_FILE, 'w') as f:
         json.dump(output, f)
 
-    logger.info("Scheduler completed: Scraping finished.")
+    logger.info("Scraper completed successfully.")
 
-    return output
-
+# --- Load Cached Data ---
 def load_cached_data():
     try:
         with open(CACHE_FILE, 'r') as f:
@@ -108,6 +107,7 @@ def load_cached_data():
     except FileNotFoundError:
         return {"error": "Cache not found. Please trigger a refresh."}
 
+# --- API Endpoints ---
 @app.route('/showtimes', methods=['GET'])
 def get_showtimes():
     data = load_cached_data()
@@ -119,21 +119,27 @@ def get_theaters():
 
 @app.route('/refresh', methods=['GET'])
 def manual_refresh():
-    data = scrape_nyc_movie_showtimes()
-    return jsonify({"status": "Refreshed", "data": data})
+    logger.info("Received /refresh request. Starting background scraper...")
+
+    def run_scraper():
+        scrape_nyc_movie_showtimes()
+
+    Thread(target=run_scraper).start()
+    return jsonify({"status": "Refresh started. Data will update shortly."})
 
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "OK", "message": "NYC Movie Showtimes API is running."})
 
+# --- Scheduler Setup ---
 def start_scheduler():
     scheduler = BackgroundScheduler()
     scheduler.add_job(scrape_nyc_movie_showtimes, 'cron', hour=4, minute=0, misfire_grace_time=60 * 60 * 2)
     scheduler.start()
+    logger.info("Daily scheduler started.")
 
+# --- App Runner ---
 if __name__ == '__main__':
-    scheduler_thread = Thread(target=start_scheduler)
-    scheduler_thread.start()
-
+    Thread(target=start_scheduler).start()
     scrape_nyc_movie_showtimes()  # Initial scrape on startup
-    app.run(debug=False, host='0.0.0.0', port=10000)  # Use debug=False for production-like behavior
+    app.run(debug=True, host='0.0.0.0', port=10000)
